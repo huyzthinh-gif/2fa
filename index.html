@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>:: 2FA_AUTH.exe :: Multi-Account Authenticator</title>
+<style>
+  :root{
+    --neon-green:#00ff9c;
+    --neon-cyan:#00e5ff;
+    --neon-pink:#ff2bd6;
+    --neon-amber:#ffb300;
+    --bg-deep:#02040a;
+    --danger:#ff2b5e;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    font-family:'Consolas','Menlo','Courier New',monospace;
+    background:
+      radial-gradient(circle at 20% 10%, rgba(0,255,156,.08), transparent 40%),
+      radial-gradient(circle at 80% 80%, rgba(0,229,255,.08), transparent 45%),
+      var(--bg-deep);
+    color:var(--neon-green);
+    min-height:100vh;
+    overflow-x:hidden;
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:28px 14px 60px;
+  }
+
+  #matrix{
+    position:fixed;
+    top:0;left:0;
+    width:100%;height:100%;
+    z-index:0;
+    opacity:.35;
+    pointer-events:none;
+  }
+
+  body::before{
+    content:'';
+    position:fixed;
+    top:0;left:0;right:0;bottom:0;
+    background:repeating-linear-gradient(
+      to bottom,
+      rgba(255,255,255,0.02) 0px,
+      rgba(255,255,255,0.02) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    pointer-events:none;
+    z-index:5;
+  }
+  body::after{
+    content:'';
+    position:fixed;
+    inset:0;
+    box-shadow:inset 0 0 160px rgba(0,0,0,.85);
+    pointer-events:none;
+    z-index:6;
+  }
+
+  .wrap{
+    position:relative;
+    z-index:10;
+    width:100%;
+    max-width:600px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
+
+  header{
+    text-align:center;
+    margin-bottom:26px;
+    width:100%;
+  }
+  .tag{
+    display:inline-block;
+    font-size:.7rem;
+    letter-spacing:2px;
+    color:var(--neon-cyan);
+    border:1px solid rgba(0,229,255,.5);
+    padding:3px 12px;
+    border-radius:3px;
+    margin-bottom:14px;
+    text-shadow:0 0 6px var(--neon-cyan);
+    box-shadow:0 0 10px rgba(0,229,255,.25) inset;
+    animation:pulseTag 2.4s ease-in-out infinite;
+  }
+  @keyframes pulseTag{
+    0%,100%{opacity:.7;}
+    50%{opacity:1;}
+  }
+  h1{
+    font-size:2rem;
+    margin:0 0 8px;
+    letter-spacing:3px;
+    color:var(--neon-green);
+    text-shadow:
+      0 0 5px var(--neon-green),
+      0 0 15px rgba(0,255,156,.6),
+      0 0 30px rgba(0,255,156,.35);
+    position:relative;
+  }
+  h1 .glitch{
+    position:relative;
+    display:inline-block;
+    animation:glitchShift 4s infinite;
+  }
+  @keyframes glitchShift{
+    0%,92%,100%{ transform:translate(0,0); }
+    93%{ transform:translate(-2px,1px); text-shadow:2px 0 var(--neon-pink), -2px 0 var(--neon-cyan); }
+    95%{ transform:translate(2px,-1px); text-shadow:-2px 0 var(--neon-pink), 2px 0 var(--neon-cyan); }
+    97%{ transform:translate(0,0); }
+  }
+  header p{
+    color:#5df7c4;
+    font-size:.82rem;
+    margin:0;
+    opacity:.8;
+    letter-spacing:.5px;
+  }
+  header p .blink{
+    animation:blink 1.1s step-end infinite;
+  }
+  @keyframes blink{
+    50%{opacity:0;}
+  }
+
+  .sound-toggle{
+    margin-top:12px;
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    font-size:.7rem;
+    color:#8ef2c4;
+    border:1px solid rgba(0,255,156,.3);
+    padding:5px 12px;
+    border-radius:20px;
+    cursor:pointer;
+    user-select:none;
+    transition:box-shadow .2s, background .2s;
+  }
+  .sound-toggle:hover{ box-shadow:0 0 12px rgba(0,255,156,.35); background:rgba(0,255,156,.06); }
+  .sound-toggle.off{ color:#5b6b63; border-color:rgba(150,150,150,.25); }
+
+  .accounts{
+    width:100%;
+    display:flex;
+    flex-direction:column;
+    gap:20px;
+    margin-bottom:22px;
+  }
+
+  .panel{
+    width:100%;
+    background:linear-gradient(180deg, rgba(6,11,22,.92), rgba(3,7,15,.96));
+    border:1px solid rgba(0,255,156,.35);
+    border-radius:6px;
+    padding:20px 20px 18px;
+    position:relative;
+    box-shadow:
+      0 0 0 1px rgba(0,255,156,.08),
+      0 0 25px rgba(0,255,156,.1),
+      0 15px 40px rgba(0,0,0,.6);
+    backdrop-filter:blur(2px);
+    transition:box-shadow .3s, border-color .3s;
+  }
+  .panel[data-color="cyan"]{ border-color:rgba(0,229,255,.35); }
+  .panel[data-color="pink"]{ border-color:rgba(255,43,214,.35); }
+  .panel[data-color="amber"]{ border-color:rgba(255,179,0,.35); }
+
+  .panel.active{
+    box-shadow:
+      0 0 0 1px rgba(0,255,156,.2),
+      0 0 35px rgba(0,255,156,.25),
+      0 15px 40px rgba(0,0,0,.6);
+  }
+
+  .panel-title{
+    font-size:.72rem;
+    letter-spacing:2px;
+    color:var(--neon-cyan);
+    margin-bottom:14px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    text-shadow:0 0 6px rgba(0,229,255,.6);
+  }
+  .panel-title::before{
+    content:'▶';
+    color:var(--neon-green);
+    font-size:.65rem;
+  }
+  .dot-row{
+    position:absolute;
+    top:14px; right:16px;
+    display:flex;
+    gap:6px;
+    align-items:center;
+  }
+  .slot-index{
+    font-size:.65rem;
+    color:#4fae86;
+    margin-right:6px;
+    letter-spacing:1px;
+  }
+  .dot-row .dots span{
+    width:8px;height:8px;border-radius:50%;
+    display:inline-block;
+  }
+  .dot-row .dots span:nth-child(1){background:#ff5f56;}
+  .dot-row .dots span:nth-child(2){background:#ffbd2e;}
+  .dot-row .dots span:nth-child(3){background:#27c93f;}
+  .dots{ display:flex; gap:6px; }
+
+  .label{
+    font-size:.78rem;
+    color:#8ef2c4;
+    margin-bottom:8px;
+    letter-spacing:.5px;
+  }
+  .label .req{color:var(--danger); text-shadow:0 0 6px var(--danger);}
+
+  .name-row{
+    margin-bottom:12px;
+  }
+  input[type="text"]{
+    background:#01050c;
+    border:1px solid rgba(0,255,156,.35);
+    color:var(--neon-green);
+    padding:11px 13px;
+    border-radius:4px;
+    font-size:.88rem;
+    font-family:inherit;
+    outline:none;
+    width:100%;
+    caret-color:var(--neon-green);
+    transition:border-color .15s, box-shadow .15s;
+    letter-spacing:1px;
+  }
+  input[type="text"]::placeholder{
+    color:#2f6b52;
+  }
+  input[type="text"]:focus{
+    border-color:var(--neon-cyan);
+    box-shadow:0 0 12px rgba(0,229,255,.45);
+  }
+  .account-name-input{
+    font-size:.85rem;
+    padding:9px 12px;
+  }
+
+  .input-row{
+    display:flex;
+    gap:10px;
+  }
+
+  /* Digit selector styles */
+  .config-row{
+    display:flex;
+    gap:12px;
+    align-items:center;
+    margin-bottom:12px;
+    flex-wrap:wrap;
+  }
+  .digit-selector{
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .digit-selector label{
+    font-size:.72rem;
+    color:#8ef2c4;
+    letter-spacing:.5px;
+  }
+  .digit-select{
+    background:#01050c;
+    border:1px solid rgba(0,255,156,.35);
+    color:var(--neon-green);
+    padding:7px 10px;
+    border-radius:4px;
+    font-size:.82rem;
+    font-family:inherit;
+    outline:none;
+    cursor:pointer;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .digit-select:focus{
+    border-color:var(--neon-cyan);
+    box-shadow:0 0 10px rgba(0,229,255,.35);
+  }
+  .digit-select option{
+    background:#01050c;
+    color:var(--neon-green);
+  }
+
+  button{
+    border:none;
+    border-radius:4px;
+    padding:12px 18px;
+    font-size:.82rem;
+    font-weight:700;
+    font-family:inherit;
+    letter-spacing:1.5px;
+    cursor:pointer;
+    transition:transform .1s, box-shadow .2s, opacity .15s;
+    white-space:nowrap;
+    text-transform:uppercase;
+  }
+  button:active{transform:scale(.95);}
+
+  .btn-primary{
+    background:linear-gradient(135deg, var(--neon-green), #00c37a);
+    color:#02180f;
+    box-shadow:0 0 15px rgba(0,255,156,.5);
+  }
+  .btn-primary:hover{box-shadow:0 0 25px rgba(0,255,156,.85);}
+
+  .hint{
+    font-size:.7rem;
+    color:#4fae86;
+    margin-top:10px;
+    line-height:1.5;
+  }
+
+  .status{
+    margin-top:10px;
+    font-size:.75rem;
+    min-height:16px;
+    letter-spacing:.5px;
+  }
+  .status.error{color:var(--danger); text-shadow:0 0 6px rgba(255,43,94,.6);}
+  .status.success{color:var(--neon-green); text-shadow:0 0 6px rgba(0,255,156,.5);}
+
+  .code-display{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    background:#01050c;
+    border:1px solid rgba(0,229,255,.35);
+    border-radius:6px;
+    padding:16px 18px;
+    margin-top:14px;
+    position:relative;
+    overflow:hidden;
+  }
+  .code-display::before{
+    content:'';
+    position:absolute;
+    inset:0;
+    background:linear-gradient(90deg, transparent, rgba(0,229,255,.08), transparent);
+    animation:sweep 3s linear infinite;
+  }
+  @keyframes sweep{
+    0%{ transform:translateX(-100%); }
+    100%{ transform:translateX(100%); }
+  }
+  .code{
+    font-family:'Consolas','Courier New',monospace;
+    font-size:2.1rem;
+    letter-spacing:9px;
+    font-weight:700;
+    color:var(--neon-cyan);
+    text-shadow:0 0 8px var(--neon-cyan), 0 0 20px rgba(0,229,255,.5);
+    user-select:all;
+    position:relative;
+    z-index:1;
+  }
+  .code.placeholder{
+    color:#2f6b52;
+    font-size:1.3rem;
+    letter-spacing:4px;
+    text-shadow:none;
+  }
+
+  .timer-wrap{
+    position:relative;
+    width:46px;
+    height:46px;
+    flex-shrink:0;
+    z-index:1;
+  }
+  svg{transform:rotate(-90deg);}
+  .timer-bg{fill:none;stroke:rgba(0,255,156,.15);stroke-width:4;}
+  .timer-fg{
+    fill:none;
+    stroke:var(--neon-green);
+    stroke-width:4;
+    stroke-linecap:round;
+    transition:stroke-dashoffset 1s linear, stroke .3s;
+    filter:drop-shadow(0 0 4px currentColor);
+  }
+  .timer-text{
+    position:absolute;
+    top:0;left:0;right:0;bottom:0;
+    display:flex;align-items:center;justify-content:center;
+    font-size:.82rem;font-weight:700;color:var(--neon-green);
+    text-shadow:0 0 6px currentColor;
+  }
+
+  .top-actions{
+    display:flex;
+    justify-content:flex-end;
+    margin-top:12px;
+  }
+  .copy-btn{
+    background:transparent;
+    color:var(--neon-cyan);
+    border:1px solid rgba(0,229,255,.5);
+    padding:8px 14px;
+    font-size:.72rem;
+    box-shadow:0 0 10px rgba(0,229,255,.15);
+  }
+  .copy-btn:hover{
+    background:rgba(0,229,255,.1);
+    box-shadow:0 0 18px rgba(0,229,255,.5);
+  }
+
+  footer{
+    width:100%;
+    color:#3f8f6d;
+    font-size:.72rem;
+    text-align:left;
+    background:rgba(0,10,6,.5);
+    border:1px solid rgba(0,255,156,.15);
+    border-radius:6px;
+    padding:14px 16px;
+    line-height:1.7;
+  }
+  footer .prompt{color:var(--neon-green);}
+  footer .comment{color:#2f6b52;}
+
+  ::selection{
+    background:var(--neon-green);
+    color:#02180f;
+  }
+
+  @media (max-width:480px){
+    .input-row{flex-direction:column;}
+    .code{font-size:1.7rem;letter-spacing:5px;}
+    h1{font-size:1.5rem;}
+    .config-row{flex-direction:column;align-items:flex-start;}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="matrix"></canvas>
+
+<div class="wrap">
+
+  <header>
+    <div class="tag">SYSTEM ONLINE • SECURE MODE • 3 SLOTS</div>
+    <h1><span class="glitch">2FA_AUTH</span>.exe</h1>
+    <p>&gt; Multi-Account Two-Factor Authentication Generator <span class="blink">_</span></p>
+    <div class="sound-toggle" id="soundToggle">🔊 SOUND: ON</div>
+  </header>
+
+  <div class="accounts" id="accountsContainer"></div>
+
+  <footer>
+    <span class="prompt">&gt;</span> TOTP Standard: RFC 6238<br>
+    <span class="comment">// Supported code lengths: 6, 7, or 8 digits</span><br>
+    <span class="comment">// Default interval: 30 seconds per code</span><br>
+    <span class="prompt">&gt;</span> Compatible with Google Authenticator, Authy, Microsoft Authenticator
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  /* ================= MATRIX RAIN ================= */
+  const canvas = document.getElementById('matrix');
+  const ctx = canvas.getContext('2d');
+  let w, h, drops = [];
+  function resize(){
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+    const cols = Math.floor(w / 15);
+    drops.length = cols;
+    for (let i = 0; i < cols; i++){
+      if (drops[i] === undefined) drops[i] = Math.random() * h / 15;
+    }
+  }
+  window.addEventListener('resize', resize);
+  resize();
+  const chars = '01アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
+  function draw(){
+    ctx.fillStyle = 'rgba(2, 4, 10, 0.05)';
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#00ff9c';
+    ctx.font = '15px monospace';
+    const cols = drops.length;
+    for (let i = 0; i < cols; i++){
+      const ch = chars[Math.floor(Math.random() * chars.length)];
+      ctx.fillText(ch, i * 15, drops[i] * 15);
+      if (drops[i] * 15 > h && Math.random() > 0.975){
+        drops[i] = 0;
+      }
+      drops[i]++;
+    }
+  }
+  setInterval(draw, 50);
+
+  /* ================= BEEP SOUND ENGINE ================= */
+  let audioCtx = null;
+  let soundOn = true;
+  function ensureAudioCtx(){
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+  function playBeep({freq=880, duration=0.08, type='square', volume=0.06, glide=0}={}){
+    if (!soundOn) return;
+    try{
+      const ctxA = ensureAudioCtx();
+      const osc = ctxA.createOscillator();
+      const gain = ctxA.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, ctxA.currentTime);
+      if (glide) osc.frequency.exponentialRampToValueAtTime(Math.max(freq+glide,40), ctxA.currentTime + duration);
+      gain.gain.setValueAtTime(volume, ctxA.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctxA.currentTime + duration);
+      osc.connect(gain).connect(ctxA.destination);
+      osc.start();
+      osc.stop(ctxA.currentTime + duration + 0.02);
+    }catch(e){ /* ignore audio errors */ }
+  }
+  function beepSubmit(){ playBeep({freq:660, duration:0.09, type:'square', volume:0.07, glide:220}); }
+  function beepCopy(){ playBeep({freq:1200, duration:0.06, type:'square', volume:0.055, glide:-300}); }
+  function beepError(){ playBeep({freq:180, duration:0.16, type:'sawtooth', volume:0.06, glide:-80}); }
+  function beepSuccess(){
+    playBeep({freq:880, duration:0.07, type:'square', volume:0.06});
+    setTimeout(()=>playBeep({freq:1320, duration:0.09, type:'square', volume:0.06}), 80);
+  }
+  function beepToggle(){ playBeep({freq:520, duration:0.06, type:'triangle', volume:0.05}); }
+
+  const soundToggle = document.getElementById('soundToggle');
+  soundToggle.addEventListener('click', ()=>{
+    soundOn = !soundOn;
+    soundToggle.textContent = soundOn ? '🔊 SOUND: ON' : '🔇 SOUND: OFF';
+    soundToggle.classList.toggle('off', !soundOn);
+    if (soundOn) beepToggle();
+  });
+
+  /* ================= TOTP CORE ================= */
+  const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  function base32Decode(input) {
+    const clean = input.replace(/=+$/,'').toUpperCase().replace(/[^A-Z2-7]/g,'');
+    if (!clean.length) throw new Error('Secret rỗng hoặc không hợp lệ');
+    let bits = '';
+    for (const ch of clean) {
+      const val = BASE32_ALPHABET.indexOf(ch);
+      if (val === -1) throw new Error('Ký tự không hợp lệ trong secret: ' + ch);
+      bits += val.toString(2).padStart(5, '0');
+    }
+    const bytes = [];
+    for (let i = 0; i + 8 <= bits.length; i += 8) {
+      bytes.push(parseInt(bits.substring(i, i + 8), 2));
+    }
+    return new Uint8Array(bytes);
+  }
+
+  function intToBytes(num) {
+    const buf = new ArrayBuffer(8);
+    const view = new DataView(buf);
+    const high = Math.floor(num / Math.pow(2, 32));
+    const low = num % Math.pow(2, 32);
+    view.setUint32(0, high);
+    view.setUint32(4, low);
+    return new Uint8Array(buf);
+  }
+
+  async function hmacSha1(keyBytes, msgBytes) {
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw', keyBytes, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']
+    );
+    const sig = await crypto.subtle.sign('HMAC', cryptoKey, msgBytes);
+    return new Uint8Array(sig);
+  }
+
+  async function generateTOTP(secretBytes, timeStepSeconds = 30, digits = 6) {
+    // Validate digits parameter
+    if (![6, 7, 8].includes(digits)) {
+      digits = 6; // Default to 6 if invalid
+    }
+    const counter = Math.floor(Date.now() / 1000 / timeStepSeconds);
+    const counterBytes = intToBytes(counter);
+    const hmac = await hmacSha1(secretBytes, counterBytes);
+    const offset = hmac[hmac.length - 1] & 0x0f;
+    const binCode = ((hmac[offset] & 0x7f) << 24) |
+                     ((hmac[offset + 1] & 0xff) << 16) |
+                     ((hmac[offset + 2] & 0xff) << 8) |
+                     (hmac[offset + 3] & 0xff);
+    const otp = (binCode % Math.pow(10, digits)).toString().padStart(digits, '0');
+    return otp;
+  }
+
+  /* ================= ACCOUNT SLOT FACTORY ================= */
+  const ACCOUNT_COLORS = ['green','cyan','pink'];
+  const container = document.getElementById('accountsContainer');
+  const CIRC = 2 * Math.PI * 21;
+
+  function buildPanel(index){
+    const colorKey = ACCOUNT_COLORS[index % ACCOUNT_COLORS.length];
+    const wrapper = document.createElement('div');
+    wrapper.className = 'panel';
+    wrapper.dataset.color = colorKey;
+    wrapper.innerHTML = `
+      <div class="dot-row">
+        <span class="slot-index">SLOT_0${index+1}</span>
+        <span class="dots"><span></span><span></span><span></span></span>
+      </div>
+      <div class="panel-title">ACCOUNT_0${index+1} :: TOTP_ENGINE</div>
+
+      <div class="name-row">
+        <input type="text" class="account-name-input" placeholder="Tên tài khoản (vd: Gmail, GitHub, Binance...)" data-role="name">
+      </div>
+
+      <div class="config-row">
+        <div class="digit-selector">
+          <label for="digits-${index}">CODE LEN:</label>
+          <select class="digit-select" id="digits-${index}" data-role="digits">
+            <option value="6" selected>6 digits</option>
+            <option value="7">7 digits</option>
+            <option value="8">8 digits</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="label"><span class="req">*</span> 2FA Secret</div>
+      <div class="input-row">
+        <input type="text" placeholder="Nhập khoá Base32, vd: JBSWY3DPEHPK3PXP" autocomplete="off" spellcheck="false" data-role="secret">
+        <button class="btn-primary" data-role="submit">▶ Submit</button>
+      </div>
+      <div class="status" data-role="status"></div>
+
+      <div class="code-display">
+        <div class="code placeholder" data-role="code">------</div>
+        <div class="timer-wrap">
+          <svg width="46" height="46">
+            <circle class="timer-bg" cx="23" cy="23" r="21"></circle>
+            <circle class="timer-fg" data-role="timerCircle" cx="23" cy="23" r="21" stroke-dasharray="${CIRC.toFixed(2)}" stroke-dashoffset="0"></circle>
+          </svg>
+          <div class="timer-text" data-role="timerText">30</div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button class="copy-btn" data-role="copy">📋 COPY</button>
+      </div>
+    `;
+    return wrapper;
+  }
+
+  function initAccount(index){
+    const panel = buildPanel(index);
+    container.appendChild(panel);
+
+    const nameInput = panel.querySelector('[data-role="name"]');
+    const secretInput = panel.querySelector('[data-role="secret"]');
+    const digitsSelect = panel.querySelector('[data-role="digits"]');
+    const submitBtn = panel.querySelector('[data-role="submit"]');
+    const statusMsg = panel.querySelector('[data-role="status"]');
+    const codeOutput = panel.querySelector('[data-role="code"]');
+    const copyBtn = panel.querySelector('[data-role="copy"]');
+    const timerText = panel.querySelector('[data-role="timerText"]');
+    const timerCircle = panel.querySelector('[data-role="timerCircle"]');
+
+    let currentSecretBytes = null;
+    let currentDigits = 6;
+    let tickInterval = null;
+
+    function setStatus(msg, type){
+      statusMsg.textContent = msg || '';
+      statusMsg.className = 'status' + (type ? ' ' + type : '');
+    }
+
+    function stopTicking(){
+      if (tickInterval){ clearInterval(tickInterval); tickInterval = null; }
+      panel.classList.remove('active');
+    }
+
+    function updateTimerVisual(){
+      const secondsRemaining = 30 - (Math.floor(Date.now() / 1000) % 30);
+      timerText.textContent = secondsRemaining;
+      const offset = CIRC * (1 - secondsRemaining / 30);
+      timerCircle.style.strokeDashoffset = offset;
+      timerCircle.style.stroke = secondsRemaining <= 5 ? '#ff2b5e' : '#00ff9c';
+      return secondsRemaining;
+    }
+
+    async function refreshCode(){
+      if (!currentSecretBytes) return;
+      try{
+        const otp = await generateTOTP(currentSecretBytes, 30, currentDigits);
+        codeOutput.textContent = otp;
+        codeOutput.classList.remove('placeholder');
+      }catch(e){
+        setStatus('>> LỖI khi tạo mã: ' + e.message, 'error');
+        stopTicking();
+      }
+    }
+
+    async function startTicking(){
+      stopTicking();
+      panel.classList.add('active');
+      await refreshCode();
+      updateTimerVisual();
+      tickInterval = setInterval(async () => {
+        const sec = updateTimerVisual();
+        if (sec === 30) await refreshCode();
+      }, 1000);
+    }
+
+    async function handleSubmit(){
+      beepSubmit();
+      const raw = secretInput.value.trim();
+      if (!raw){
+        setStatus('>> Vui lòng nhập 2FA Secret.', 'error');
+        beepError();
+        return;
+      }
+      try{
+        currentSecretBytes = base32Decode(raw);
+        if (currentSecretBytes.length === 0) throw new Error('Secret không hợp lệ');
+        currentDigits = parseInt(digitsSelect.value, 10) || 6;
+        const label = nameInput.value.trim();
+        setStatus(`>> ${label ? `[${label}] ` : ''}Đã kết nối. Mã ${currentDigits} chữ số, làm mới mỗi 30s.`, 'success');
+        beepSuccess();
+        await startTicking();
+      }catch(e){
+        currentSecretBytes = null;
+        codeOutput.textContent = '------';
+        codeOutput.classList.add('placeholder');
+        stopTicking();
+        setStatus('>> ' + (e.message || 'Secret không hợp lệ.'), 'error');
+        beepError();
+      }
+    }
+
+    // Listen for digit changes to refresh code immediately if already active
+    digitsSelect.addEventListener('change', async () => {
+      const newDigits = parseInt(digitsSelect.value, 10) || 6;
+      if (newDigits !== currentDigits) {
+        currentDigits = newDigits;
+        if (currentSecretBytes) {
+          await refreshCode();
+          const label = nameInput.value.trim();
+          setStatus(`>> ${label ? `[${label}] ` : ''}Đã cập nhật: ${currentDigits} chữ số.`, 'success');
+        }
+      }
+    });
+
+    submitBtn.addEventListener('click', handleSubmit);
+    secretInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSubmit(); });
+    nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSubmit(); });
+
+    copyBtn.addEventListener('click', async () => {
+      beepCopy();
+      const text = codeOutput.textContent;
+      if (!text || text === '------'){
+        setStatus('>> Chưa có mã để sao chép.', 'error');
+        beepError();
+        return;
+      }
+      try{
+        await navigator.clipboard.writeText(text);
+        const old = copyBtn.textContent;
+        copyBtn.textContent = '✅ COPIED!';
+        setTimeout(() => { copyBtn.textContent = old; }, 1500);
+      }catch(e){
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        copyBtn.textContent = '✅ COPIED!';
+        setTimeout(() => { copyBtn.textContent = '📋 COPY'; }, 1500);
+      }
+    });
+  }
+
+  for (let i = 0; i < 3; i++){
+    initAccount(i);
+  }
+})();
+</script>
+
+</body>
+</html>
